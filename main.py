@@ -66,7 +66,8 @@ class ConveyorCnnTrainer():
         Creating the loss function that will be use to optimize the network
         """
         if task == 'classification':
-            criterion = nn.BCEWithLogitsLoss()
+            class_weights = torch.tensor([1.105, 1.002, 1.0])
+            criterion = nn.BCEWithLogitsLoss(weight=class_weights)
             return criterion
         elif task == 'detection':
             # À compléter
