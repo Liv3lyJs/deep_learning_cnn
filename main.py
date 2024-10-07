@@ -10,7 +10,7 @@ import torch.optim as optim
 from torchvision import transforms
 
 from dataset import ConveyorSimulator
-from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
+from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, Custom_loss_detection
 from visualizer import Visualizer
 
 from models import classification_network, detection_network, segmentation_network
@@ -51,8 +51,8 @@ class ConveyorCnnTrainer():
             model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
             return model
         elif task == 'detection':
-            # À compléter
-            raise NotImplementedError()
+            model = detection_network.Detection_network(input_channels=1, n_classes=3)
+            return model
         elif task == 'segmentation':
             model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
             return model
@@ -70,8 +70,8 @@ class ConveyorCnnTrainer():
             criterion = nn.BCEWithLogitsLoss(weight=class_weights)
             return criterion
         elif task == 'detection':
-            # À compléter
-            raise NotImplementedError()
+            criterion = Custom_loss_detection()
+            return criterion
         elif task == 'segmentation':
             # Define the segmentation loss function
             class_weights = torch.tensor([7.0, 5.0, 5.0, 1.0])
@@ -277,7 +277,20 @@ class ConveyorCnnTrainer():
 
             return loss
         elif task =='detection':
-            return 0
+            # Training one batch for detection neural network 
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+
+            # Forward + backward + optim
+            outputs = model(image)
+            loss = criterion.forward(outputs, boxes)
+            loss.backward()
+            optimizer.step()
+
+            # Calculate the accuracy 
+            metric.accumulate(outputs, boxes)
+
+            return loss
         elif task == 'segmentation':
             # Training one batch for segmentation neural network
             # Zero the parameter gradients
@@ -349,7 +362,16 @@ class ConveyorCnnTrainer():
 
             return loss
         elif task =='detection':
-            return 0
+            # Testing the batch for the detection
+            outputs = model(image)
+
+            # Loss calculation 
+            loss = criterion.forward(outputs, boxes)
+
+            # Calculate the accuracy 
+            metric.accumulate(outputs, boxes)
+
+            return loss
         elif task == 'segmentation':
             # testing the batch for the segmentation
             # Getting the prediction

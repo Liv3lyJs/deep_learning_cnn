@@ -12,10 +12,10 @@
             "console": "integratedTerminal", 
             "args": [
                 "--mode", "train",
-                "--task", "classification",
+                "--task", "detection",
                 "--batch_size", "16", 
                 "--epochs", "100",
-                "--lr", "0.0001",
+                "--lr", "0.001",
                 "--early_stop", "25"
             ]
         }

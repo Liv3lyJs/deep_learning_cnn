@@ -1,4 +1,5 @@
 import sys
+import torch.nn as nn
 
 import numpy as np
 
@@ -266,3 +267,11 @@ def segmentation_intersection_over_union(prediction, target, background_class):
         union += predicted_mask.sum() + target_mask.sum() - (predicted_mask * target_mask).sum()
 
     return intersection, union
+
+
+class Custom_loss_detection():
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input, target):
+        return "Hello"
