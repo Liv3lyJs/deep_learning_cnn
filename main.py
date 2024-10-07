@@ -48,13 +48,13 @@ class ConveyorCnnTrainer():
 
     def _create_model(self, task):
         if task == 'classification':
-            # À compléter
-            raise NotImplementedError()
+            model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
+            return model
         elif task == 'detection':
             # À compléter
             raise NotImplementedError()
         elif task == 'segmentation':
-            model = segmentation_network.UNet(input_channels=1, n_classes=4)
+            model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
             return model
         else:
             print(f'The task selected is not classification, detection nor segmentation.')
@@ -66,8 +66,8 @@ class ConveyorCnnTrainer():
         Creating the loss function that will be use to optimize the network
         """
         if task == 'classification':
-            # À compléter
-            raise NotImplementedError()
+            criterion = nn.BCEWithLogitsLoss()
+            return criterion
         elif task == 'detection':
             # À compléter
             raise NotImplementedError()
@@ -262,7 +262,19 @@ class ConveyorCnnTrainer():
         :return: La valeur de la fonction de coût pour le lot
         """
         if task == 'classification':
-            return 0
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+
+            # Forward + backward + optim
+            outputs = model(image)
+            loss = criterion(outputs, class_labels)
+            loss.backward()
+            optimizer.step()
+
+            # Calculate the accuracy metric
+            metric.accumulate(outputs, class_labels)
+
+            return loss
         elif task =='detection':
             return 0
         elif task == 'segmentation':
@@ -324,7 +336,17 @@ class ConveyorCnnTrainer():
         :return: La valeur de la fonction de coût pour le lot
         """
         if task == 'classification':
-            return 0
+            # Testing the batch for the classification 
+            # Getting the prediction
+            outputs = model(image)
+
+            # Loss calculation
+            loss = criterion(outputs, class_labels)
+
+            # Calculate the accuracy metric
+            metric.accumulate(outputs, class_labels)
+
+            return loss
         elif task =='detection':
             return 0
         elif task == 'segmentation':
