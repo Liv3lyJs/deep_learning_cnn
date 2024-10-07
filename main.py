@@ -10,6 +10,7 @@ from torchvision import transforms
 from dataset import ConveyorSimulator
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
 from visualizer import Visualizer
+from models.detection_network import *
 
 TRAIN_VALIDATION_SPLIT = 0.9
 CLASS_PROBABILITY_THRESHOLD = 0.5
@@ -48,7 +49,7 @@ class ConveyorCnnTrainer():
             raise NotImplementedError()
         elif task == 'detection':
             # À compléter
-            raise NotImplementedError()
+            return YOLO()
         elif task == 'segmentation':
             # À compléter
             raise NotImplementedError()
@@ -61,7 +62,8 @@ class ConveyorCnnTrainer():
             raise NotImplementedError()
         elif task == 'detection':
             # À compléter
-            raise NotImplementedError()
+            return torch.nn.MSELoss()
+            #raise NotImplementedError()
         elif task == 'segmentation':
             # À compléter
             raise NotImplementedError()
@@ -246,9 +248,38 @@ class ConveyorCnnTrainer():
                 Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
+        # Mettre le modèle en mode entraînement
+        model.train()
 
+        # Reset gradient
+        optimizer.zero_grad()
+
+        # Forward pass
+        predictions = model(image)
+
+        # Adjust target tensor shape to match predictions
+        target_boxes = torch.zeros_like(predictions)
+        target_boxes[:, :boxes.size(1), :] = boxes
+
+        # Calcul de la perte
+        if task == 'detection':
+            # Utilisation de la fonction de coût pour la détection
+            loss = criterion(predictions, target_boxes)
+        else:
+            raise ValueError("Unsupported task for _train_batch")
+
+        # Backward pass
+        loss.backward()
+
+        # Optimizer step
+        optimizer.step()
+
+        # Accumulate metric
+        metric.accumulate(predictions, boxes)
+
+        return loss
         # À compléter
-        raise NotImplementedError()
+        #raise NotImplementedError()
 
     def _test_batch(self, task, model, criterion, metric, image, segmentation_target, boxes, class_labels):
         """
