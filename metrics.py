@@ -231,11 +231,8 @@ def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
             # Extract the class logits from the last 3 columns for the best prediction
             best_pred_class_logits = prediction[best_pred_idx, 4:]  # Shape: (3,) - Logits for classes 0, 1, 2
 
-            # Cross-entropy expects input shape (batch_size, num_classes), so we need to unsqueeze
-            best_pred_class_logits = best_pred_class_logits.unsqueeze(0)  # Shape: (1, 3)
-
             # Calculate cross-entropy loss for class prediction
-            class_loss += ce_loss(best_pred_class_logits, class_label.unsqueeze(0))
+            class_loss += ce_loss(best_pred_class_logits, class_label)
 
         # Combine the losses for this image
         total_loss += A * box_loss + B * class_loss

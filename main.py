@@ -51,7 +51,7 @@ class ConveyorCnnTrainer():
             model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
             return model
         elif task == 'detection':
-            model = detection_network.Detection_network()
+            model = detection_network.AlexNet()
             return model
         elif task == 'segmentation':
             model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
