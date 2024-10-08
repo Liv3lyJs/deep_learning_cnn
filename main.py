@@ -10,8 +10,7 @@ import torch.optim as optim
 from torchvision import transforms
 
 from dataset import ConveyorSimulator
-from deep_learning_cnn.metrics import alexnet_loss2
-from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, Custom_loss_detection
+from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, alexnet_loss2
 from visualizer import Visualizer
 
 from models import classification_network, detection_network, segmentation_network
@@ -52,7 +51,7 @@ class ConveyorCnnTrainer():
             model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
             return model
         elif task == 'detection':
-            model = detection_network.AlexNet()
+            model = detection_network.Detection_network()
             return model
         elif task == 'segmentation':
             model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
