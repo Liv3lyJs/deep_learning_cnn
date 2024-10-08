@@ -274,4 +274,30 @@ class Custom_loss_detection():
         super().__init__()
 
     def forward(self, input, target):
-        return "Hello"
+        for i, (entree_batch, cible_batch) in enumerate(zip(input, target)):  # Entree = 7, 7, 15  -  Cible = 3, 5
+            print(f'Currently analysing batch: {i+1}')
+            value_iou_obj1 = []
+            # Si aucun objets
+            if cible_batch[0, 0] == 1:
+                # Itterer sur les rows de la batch
+                for j in entree_batch: # Entree = 7, 15
+                    # Itterer sur les columns de la batch
+                    for k in j: # Entree = 15
+                        # Envoyer les donnees de x, y, largeur de entree et cible 
+                        value_iou_obj1.append(detection_intersection_over_union(box_a=k[1:4], box_b=cible_batch[0, 1:4]))
+            else:
+                print(f'There are no object in the batch')
+                value_iou_obj1.append(0.0)
+
+                    
+
+            # for j, entree, cible in enumerate(zip(input, target), start=0):    
+            #     print(f'We are analyzing data: {j+1}')
+            #     print(f'Analyzing the first object...')
+            #     value_iou = []
+            #     if entree[:, :, 0] == 1 and entree[:, :, -1] == 0:
+            #         box_entree = entree[:, :, 3]
+            #         box_cible = cible[:, :, 3]
+            #         value_iou.append(detection_intersection_over_union(box_entree, box_cible))
+            #     else:
+            #         print(f'There is no object in the first section')
