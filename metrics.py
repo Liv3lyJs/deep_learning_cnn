@@ -187,7 +187,7 @@ class MeanAveragePrecisionMetric(Metric):
 
 
 def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
-    A = 1
+    A = 0.95
     B = 1
     batch_size = predictions.shape[0]
     total_loss = 0

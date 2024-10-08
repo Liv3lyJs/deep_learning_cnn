@@ -1,35 +1,36 @@
 import torch
 import torch.nn as nn
 
-class AlexNet(nn.Module):
+
+class Detection_network(nn.Module):
     def __init__(self, num_classes=3):
-        super(AlexNet, self).__init__()
+        super(Detection_network, self).__init__()
 
-        # Since the input image size is 53x53, there is no need for upscaling at the start.
-
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),
-            nn.BatchNorm2d(16),
+        self.bloc1 = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),  # Shape (53,53)
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))  # Output size: (16, 27, 27)
+            nn.MaxPool2d(kernel_size=2, stride=2))  # Shape (27, 27)
 
-        self.layer2 = nn.Sequential(
+        self.bloc2 = nn.Sequential(
             nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(16),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))  # Output size: (16, 13, 13)
+            nn.MaxPool2d(kernel_size=2, stride=2))  # Shape (13, 13)
 
-        self.layer4 = nn.Sequential(
+        self.bloc3 = nn.Sequential(
             nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU())  # Output size: (32, 13, 13)
-
-        self.layer5 = nn.Sequential(
+            nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))  # Output size: (32, 6, 6)
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+        )
+
+        self.bloc4 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))  # Shape (6, 6)
 
         self.fc = nn.Sequential(
-            nn.Dropout(0.5),
             nn.Linear(32 * 6 * 6, 100),
             nn.ReLU())
 
@@ -37,24 +38,83 @@ class AlexNet(nn.Module):
         self.fc1 = nn.Linear(100, 3 * (4 + num_classes))  # Output shape: (batch_size, 21)
 
     def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = self.layer4(out)
-        out = self.layer5(out)
-        out = out.reshape(out.size(0), -1)  # Flatten to (batch_size, 32 * 6 * 6)
-        out = self.fc(out)
-        out = self.fc1(out)  # Output shape: (batch_size, 21)
+        x = self.bloc1(x)
+        x = self.bloc2(x)
+        x = self.bloc3(x)
+        x = self.bloc4(x)
+        x = x.reshape(x.size(0), -1)  # Flatten to (batch_size, 32 * 6 * 6)
+        x = self.fc(x)
+        x = self.fc1(x)  # Output shape: (batch_size, 21)
 
         # Reshape output to (batch_size, 3, 7) where 7 is (4 parameters + 3 logits)
-        out = out.view(out.size(0), 3, 4 + 3)  # Shape: (batch_size, 3, 7)
+        output = x.view(x.size(0), 3, 4 + 3)  # Shape: (batch_size, 3, 7)
 
         # Apply sigmoid activation to the first 4 parameters (presence, x, y, size)
-        out[:, :, :4] = torch.sigmoid(out[:, :, :4])
+        output[:, :, :4] = torch.sigmoid(output[:, :, :4])
 
         # The last 3 values (logits) are kept as they are for class prediction
         # (No activation applied here since they will be used with CrossEntropyLoss)
 
-        return out
+        return output
+
+
+# import torch
+# import torch.nn as nn
+#
+# class AlexNet(nn.Module):
+#     def __init__(self, num_classes=3):
+#         super(AlexNet, self).__init__()
+#
+#         # Since the input image size is 53x53, there is no need for upscaling at the start.
+#
+#         self.layer1 = nn.Sequential(
+#             nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),
+#             nn.BatchNorm2d(16),
+#             nn.ReLU(),
+#             nn.MaxPool2d(kernel_size=2, stride=2))  # Output size: (16, 27, 27)
+#
+#         self.layer2 = nn.Sequential(
+#             nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1),
+#             nn.BatchNorm2d(16),
+#             nn.ReLU(),
+#             nn.MaxPool2d(kernel_size=2, stride=2))  # Output size: (16, 13, 13)
+#
+#         self.layer4 = nn.Sequential(
+#             nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU())  # Output size: (32, 13, 13)
+#
+#         self.layer5 = nn.Sequential(
+#             nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.MaxPool2d(kernel_size=2, stride=2))  # Output size: (32, 6, 6)
+#
+#         self.fc = nn.Sequential(
+#             nn.Dropout(0.5),
+#             nn.Linear(32 * 6 * 6, 100),
+#             nn.ReLU())
+#
+#         # Output size is 3 objects * (4 parameters + 3 class logits) = 3 * 7 = 21
+#         self.fc1 = nn.Linear(100, 3 * (4 + num_classes))  # Output shape: (batch_size, 21)
+#
+#     def forward(self, x):
+#         out = self.layer1(x)
+#         out = self.layer2(out)
+#         out = self.layer4(out)
+#         out = self.layer5(out)
+#         out = out.reshape(out.size(0), -1)  # Flatten to (batch_size, 32 * 6 * 6)
+#         out = self.fc(out)
+#         out = self.fc1(out)  # Output shape: (batch_size, 21)
+#
+#         # Reshape output to (batch_size, 3, 7) where 7 is (4 parameters + 3 logits)
+#         out = out.view(out.size(0), 3, 4 + 3)  # Shape: (batch_size, 3, 7)
+#
+#         # Apply sigmoid activation to the first 4 parameters (presence, x, y, size)
+#         out[:, :, :4] = torch.sigmoid(out[:, :, :4])
+#
+#         # The last 3 values (logits) are kept as they are for class prediction
+#         # (No activation applied here since they will be used with CrossEntropyLoss)
+#
+#         return out
 #marche pas :
 #
 #
