@@ -185,6 +185,20 @@ class MeanAveragePrecisionMetric(Metric):
 
         return np.trapz(y=precisions, x=recalls)
 
+def alexnet_loss(predictions, targets, classe):
+    A = 1
+    B = 1
+    batch_size = predictions.shape[0]
+    match classe:
+        case 0:
+            for i in range(batch_size):
+                target = targets[i]
+                prediction = predictions[i]
+                L_xywh = (target[1] - prediction[1])**2 + (target[2] - prediction[2])**2 + 2*((np.sqrt(target[3]) - np.sqrt(prediction[3]))**2)
+                L_class = nn.BCELoss()(prediction[0],target[0])
+                L = A * L_xywh + B * L_class
+                return L
+
 
 def detection_intersection_over_union(box_a, box_b):
     area_a = box_a[2] ** 2

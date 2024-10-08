@@ -280,8 +280,6 @@ class ConveyorCnnTrainer():
             # Training one batch for detection neural network 
             # Zero the parameter gradients
             optimizer.zero_grad()
-
-            # Forward + backward + optim
             outputs = model(image)
             loss = criterion.forward(outputs, boxes)
             loss.backward()
