@@ -10,7 +10,7 @@ import torch.optim as optim
 from torchvision import transforms
 
 from dataset import ConveyorSimulator
-from deep_learning_cnn.metrics import alexnet_loss2
+from metrics import *
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, Custom_loss_detection
 from visualizer import Visualizer
 
@@ -71,7 +71,7 @@ class ConveyorCnnTrainer():
             criterion = nn.BCEWithLogitsLoss(weight=class_weights)
             return criterion
         elif task == 'detection':
-            return alexnet_loss2
+            return alexnet_loss3
         elif task == 'segmentation':
             # Define the segmentation loss function
             class_weights = torch.tensor([7.0, 5.0, 5.0, 1.0])

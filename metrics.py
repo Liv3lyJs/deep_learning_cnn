@@ -184,10 +184,96 @@ class MeanAveragePrecisionMetric(Metric):
         precisions = precisions[sorted_index]
 
         return np.trapz(y=precisions, x=recalls)
+def _find_best_target( prediction, target):
+    C = target.shape[0]
+    ious = np.zeros(C)
+    for c in range(C):
+        if target[c, 0] == 1:
+            iou = detection_intersection_over_union(prediction[1:4], target[c, 1:4])
+            ious[c] = iou
+        else:
+            ious[c] = 0
 
+    target_index = np.argmax(ious)
+    return ious[target_index], target_index
+
+def alexnet_loss3(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
+    A = 1
+    B = 1
+    batch_size = predictions.shape[0]
+    total_loss = 0
+    ce_loss = nn.CrossEntropyLoss()
+    obj_count = 0
+
+    # Step 1: Iterate over each image in the batch
+    for i in range(batch_size):
+        target = targets[i]  # Shape: (3, 5)
+        prediction = predictions[i]  # Shape: (3, 7)
+        box_loss = 0.0
+        class_loss = 0.0
+        used_predictions = [False] * 3  # Track if a prediction has already been matched
+
+        # Step 2: Iterate over each target object in the image
+        for j in range(3):
+            presence = target[j, 0]  # Step 3: Extract presence indicator (0 or 1)
+
+            # Step 3: If the object is not present, skip to the next object
+            if presence == 0:
+                continue
+
+            obj_count += 1
+
+            # Extract target box coordinates and class label
+            target_box = target[j, 1:4]  # Coordinates: (x, y, size)
+            class_label = target[j, 4].long()  # Class label
+
+            best_iou = -1
+            best_pred_idx = -1
+
+            # Step 4: Find the prediction box with the highest IoU for the current target box
+            for k in range(3):
+                if used_predictions[k]:
+                    # Skip if the prediction has already been assigned
+                    continue
+
+                pred_box = prediction[k, 1:4]  # Predicted box coordinates (x, y, size)
+                iou = detection_intersection_over_union(pred_box, target_box)
+
+                if iou > best_iou:
+                    best_iou = iou
+                    best_pred_idx = k
+
+            # Step 5: Ensure we have a valid prediction to assign
+            if best_pred_idx == -1:
+                continue  # No valid prediction was found
+
+            # Mark this prediction as used
+            used_predictions[best_pred_idx] = True
+
+            # Step 6: Calculate the IoU loss for the best matching prediction box
+            box_loss += 1 - best_iou  # Loss is 1 - IoU
+
+            # Step 7: Calculate the class loss for the best matching prediction
+            # Extract the class logits from the last 3 columns for the best prediction
+            best_pred_class_logits = prediction[best_pred_idx, 4:]  # Shape: (3,) - Logits for classes 0, 1, 2
+
+            # Cross-entropy expects input shape (batch_size, num_classes), so we need to unsqueeze
+            best_pred_class_logits = best_pred_class_logits.unsqueeze(0)  # Shape: (1, 3)
+
+            # Calculate cross-entropy loss for class prediction
+            class_loss += ce_loss(best_pred_class_logits, class_label.unsqueeze(0))
+
+        # Combine the losses for this image
+        total_loss += A * box_loss + B * class_loss
+
+    # Average the loss over the number of objects
+    if obj_count > 0:
+        total_loss = total_loss / obj_count
+
+    return total_loss
 
 def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
-    A = 0.95
+    A = 1
     B = 1
     batch_size = predictions.shape[0]
     total_loss = 0
