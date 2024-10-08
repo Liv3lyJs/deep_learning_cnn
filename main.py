@@ -10,6 +10,7 @@ import torch.optim as optim
 from torchvision import transforms
 
 from dataset import ConveyorSimulator
+from deep_learning_cnn.metrics import alexnet_loss2
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, Custom_loss_detection
 from visualizer import Visualizer
 
@@ -51,7 +52,7 @@ class ConveyorCnnTrainer():
             model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
             return model
         elif task == 'detection':
-            model = detection_network.Detection_network(inputs_channels=1, n_classes=3)
+            model = detection_network.AlexNet()
             return model
         elif task == 'segmentation':
             model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
@@ -70,8 +71,7 @@ class ConveyorCnnTrainer():
             criterion = nn.BCEWithLogitsLoss(weight=class_weights)
             return criterion
         elif task == 'detection':
-            criterion = Custom_loss_detection()
-            return criterion
+            return alexnet_loss2
         elif task == 'segmentation':
             # Define the segmentation loss function
             class_weights = torch.tensor([7.0, 5.0, 5.0, 1.0])
@@ -279,25 +279,14 @@ class ConveyorCnnTrainer():
         elif task =='detection':
             # Training one batch for detection neural network 
             # Zero the parameter gradients
-
-            #optimizers = []
-            models = []
-            outputs = []
-            losses = []
-            for i in range(3):
-                models.append(self._create_model(task))
-                optimizer.zero_grad()
-                outputs.append(image)
-                # optimus = optim.Adam(self._model.parameters(), lr=self._args.lr)
-                # optimus.zero_grad()
-                # optimizers.append(optimus)
-                loss = criterion.forward(outputs, boxes, i)
-                loss.backward()
-                losses.append(loss)
-                optimizer.step()
+            optimizer.zero_grad()
+            predictions = model(image)
+            loss = criterion(predictions, boxes)
+            loss.backward()
+            optimizer.step()
 
             # Calculate the accuracy 
-            metric.accumulate(outputs, boxes)
+            metric.accumulate(predictions, boxes)
 
             return loss
         elif task == 'segmentation':
@@ -375,7 +364,7 @@ class ConveyorCnnTrainer():
             outputs = model(image)
 
             # Loss calculation 
-            loss = criterion.forward(outputs, boxes)
+            loss = criterion(outputs, boxes)
 
             # Calculate the accuracy 
             metric.accumulate(outputs, boxes)
