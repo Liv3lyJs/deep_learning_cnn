@@ -65,7 +65,7 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             # À compléter
 
-            return alexnet_loss
+            return yolo_loss
             #raise NotImplementedError()
         elif task == 'segmentation':
             # À compléter
@@ -253,17 +253,36 @@ class ConveyorCnnTrainer():
         :return: La valeur de la fonction de coût pour le lot
         """
         # Mettre le modèle en mode entraînement
-        model.train()
-        optimizer.zero_grad()
+        # model.train()
+        # optimizer.zero_grad()
         predictions = model(image)
         loss = criterion(predictions, boxes)
         loss.backward()
         optimizer.step()
+        # Accumulate metric using IoU-based matching
         for i in range(image.size(0)):
-            ious = torch.tensor(
-                [detection_intersection_over_union(predictions[i, j, 1:4], boxes[i, j, 1:4]) for j in range(3)])
-            best_pred_idx = torch.argmax(ious)
-            metric.accumulate(predictions[i, best_pred_idx], boxes[i])
+            target_objects = boxes[i]
+            predicted_objects = predictions[i].view(7, 7, 3, 5)
+
+            for obj_idx in range(3):
+                if target_objects[obj_idx, 0] == 1:  # If object is present
+                    highest_iou = 0
+                    best_pred_idx = (-1, -1, -1)
+
+                    # Find the best matching prediction box
+                    for grid_x in range(7):
+                        for grid_y in range(7):
+                            for pred_idx in range(3):
+                                predicted_box = predicted_objects[grid_x, grid_y, pred_idx]
+                                iou = detection_intersection_over_union(target_objects[obj_idx, 1:5],
+                                                                        predicted_box[1:5])
+                                if iou > highest_iou:
+                                    highest_iou = iou
+                                    best_pred_idx = (grid_x, grid_y, pred_idx)
+
+                    # Accumulate metric for the best prediction box
+                    metric.accumulate(predicted_objects[best_pred_idx[0], best_pred_idx[1], best_pred_idx[2]],
+                                      target_objects[obj_idx])
 
 
         return loss
@@ -305,21 +324,34 @@ class ConveyorCnnTrainer():
                 Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
-        model.eval()
-
-        # Forward pass
         predictions = model(image)
         loss = criterion(predictions, boxes)
 
         # Accumulate metric using IoU-based matching
         for i in range(image.size(0)):
-            ious = torch.tensor(
-                [detection_intersection_over_union(predictions[i, j, 1:4], boxes[i, j, 1:4]) for j in range(3)])
-            best_pred_idx = torch.argmax(ious)
-            metric.accumulate(predictions[i, best_pred_idx], boxes[i])
+            target_objects = boxes[i]
+            predicted_objects = predictions[i].view(7, 7, 3, 5)
 
+            for obj_idx in range(3):
+                if target_objects[obj_idx, 0] == 1:  # If object is present
+                    highest_iou = 0
+                    best_pred_idx = (-1, -1, -1)
+
+                    # Find the best matching prediction box
+                    for grid_x in range(7):
+                        for grid_y in range(7):
+                            for pred_idx in range(3):
+                                predicted_box = predicted_objects[grid_x, grid_y, pred_idx]
+                                iou = detection_intersection_over_union(target_objects[obj_idx, 1:5],
+                                                                        predicted_box[1:5])
+                                if iou > highest_iou:
+                                    highest_iou = iou
+                                    best_pred_idx = (grid_x, grid_y, pred_idx)
+
+                    # Accumulate metric for the best prediction box
+                    metric.accumulate(predicted_objects[best_pred_idx[0], best_pred_idx[1], best_pred_idx[2]],
+                                      target_objects[obj_idx])
         return loss
-
 
 
 if __name__ == '__main__':
