@@ -7,8 +7,10 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 
+
 from dataset import ConveyorSimulator
-from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
+from deep_learning_cnn.metrics import detection_intersection_over_union
+from metrics import *
 from visualizer import Visualizer
 from models.detection_network import *
 
@@ -62,7 +64,8 @@ class ConveyorCnnTrainer():
             raise NotImplementedError()
         elif task == 'detection':
             # À compléter
-            return torch.nn.MSELoss()
+
+            return alexnet_loss
             #raise NotImplementedError()
         elif task == 'segmentation':
             # À compléter
@@ -91,7 +94,7 @@ class ConveyorCnnTrainer():
                                 SEGMENTATION_BACKGROUND_CLASS)
 
         print('Test data : ', len(dataset_test))
-        self._model.load_state_dict(torch.load(self._weights_path))
+        self._model.load_state_dict(torch.load(self._weights_path, weights_only=True))
         self._model.eval()
 
         test_loss = 0
@@ -210,6 +213,7 @@ class ConveyorCnnTrainer():
         if ans == 'y':
             self.test()
 
+
     def _train_batch(self, task, model, criterion, metric, optimizer, image, segmentation_target, boxes, class_labels):
         """
         Méthode qui effectue une passe d'entraînement sur un lot de données.
@@ -250,36 +254,19 @@ class ConveyorCnnTrainer():
         """
         # Mettre le modèle en mode entraînement
         model.train()
-
-        # Reset gradient
         optimizer.zero_grad()
-
-        # Forward pass
         predictions = model(image)
-
-        # Adjust target tensor shape to match predictions
-        target_boxes = torch.zeros_like(predictions)
-        target_boxes[:, :boxes.size(1), :] = boxes
-
-        # Calcul de la perte
-        if task == 'detection':
-            # Utilisation de la fonction de coût pour la détection
-            loss = criterion(predictions, target_boxes)
-        else:
-            raise ValueError("Unsupported task for _train_batch")
-
-        # Backward pass
+        loss = criterion(predictions, boxes)
         loss.backward()
-
-        # Optimizer step
         optimizer.step()
+        for i in range(image.size(0)):
+            ious = torch.tensor(
+                [detection_intersection_over_union(predictions[i, j, 1:4], boxes[i, j, 1:4]) for j in range(3)])
+            best_pred_idx = torch.argmax(ious)
+            metric.accumulate(predictions[i, best_pred_idx], boxes[i])
 
-        # Accumulate metric
-        metric.accumulate(predictions, boxes)
 
         return loss
-        # À compléter
-        #raise NotImplementedError()
 
     def _test_batch(self, task, model, criterion, metric, image, segmentation_target, boxes, class_labels):
         """
@@ -318,9 +305,21 @@ class ConveyorCnnTrainer():
                 Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
+        model.eval()
 
-        # À compléter
-        raise NotImplementedError()
+        # Forward pass
+        predictions = model(image)
+        loss = criterion(predictions, boxes)
+
+        # Accumulate metric using IoU-based matching
+        for i in range(image.size(0)):
+            ious = torch.tensor(
+                [detection_intersection_over_union(predictions[i, j, 1:4], boxes[i, j, 1:4]) for j in range(3)])
+            best_pred_idx = torch.argmax(ious)
+            metric.accumulate(predictions[i, best_pred_idx], boxes[i])
+
+        return loss
+
 
 
 if __name__ == '__main__':

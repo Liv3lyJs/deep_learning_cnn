@@ -1,7 +1,8 @@
 import sys
 
 import numpy as np
-
+import torch
+import torch.nn as nn
 
 class Metric:
     def get_name(self):
@@ -185,6 +186,62 @@ class MeanAveragePrecisionMetric(Metric):
         return np.trapz(y=precisions, x=recalls)
 
 
+def yolo_loss(predictions, targets):
+    # Adjust predictions to expected shape (N, 7, 7, 3, 5)
+    predictions = predictions.view(predictions.shape[0], 7, 7, 3, 5)
+    batch_size = predictions.shape[0]
+
+    highest_ious = []  # To store the highest IoU and corresponding grid info for each object in each image
+
+    # Iterate over each image in the batch
+    for i in range(batch_size):
+        target_objects = targets[i]  # Shape (3, 5)
+        predicted_objects = predictions[i]  # Shape (7, 7, 3, 5)
+
+        # Iterate over each target object (3 possible objects)
+        for obj_idx in range(3):
+            target_box = target_objects[obj_idx]  # Get the target box (shape (5,))
+
+            if target_box[0] == 1:  # If the object is present in the target
+                highest_iou = 0
+                best_grid_x = -1
+                best_grid_y = -1
+                best_pred_idx = -1
+
+                # Iterate over each grid cell (7x7)
+                for grid_x in range(7):
+                    for grid_y in range(7):
+                        # Iterate over each prediction box in the grid cell (3 per grid cell)
+                        for pred_idx in range(3):
+                            predicted_box = predicted_objects[grid_x, grid_y, pred_idx]  # Shape (5,)
+
+                            # Calculate IoU between the target box and the predicted box
+                            iou = detection_intersection_over_union(target_box[1:4], predicted_box[1:4])
+
+                            # Update the highest IoU if the current one is greater
+                            if iou > highest_iou:
+                                highest_iou = iou
+                                best_grid_x = grid_x
+                                best_grid_y = grid_y
+                                best_pred_idx = pred_idx
+
+                # Store the highest IoU and corresponding grid info for the current target object
+                highest_ious.append({
+                    'iou': highest_iou,
+                    'grid_x': best_grid_x,
+                    'grid_y': best_grid_y,
+                    'pred_idx': best_pred_idx
+                })
+
+                return highest_ious
+
+def alexnet_loss(predictions, targets):
+    batch_size = predictions.shape[0]
+    for i in range(batch_size):
+        L_xywh = 0
+        L_class = 0
+    return 0
+
 def detection_intersection_over_union(box_a, box_b):
     area_a = box_a[2] ** 2
     area_b = box_b[2] ** 2
@@ -223,6 +280,7 @@ class SegmentationIntersectionOverUnionMetric(Metric):
     def clear(self):
         self._intersection = 0.0
         self._union = 0.0
+
 
     def accumulate(self, prediction, target):
         """
