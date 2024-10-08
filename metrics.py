@@ -189,15 +189,29 @@ def alexnet_loss(predictions, targets, classe):
     A = 1
     B = 1
     batch_size = predictions.shape[0]
-    match classe:
-        case 0:
-            for i in range(batch_size):
-                target = targets[i]
-                prediction = predictions[i]
-                L_xywh = (target[1] - prediction[1])**2 + (target[2] - prediction[2])**2 + 2*((np.sqrt(target[3]) - np.sqrt(prediction[3]))**2)
-                L_class = nn.BCELoss()(prediction[0],target[0])
-                L = A * L_xywh + B * L_class
-                return L
+    for i in range(batch_size):
+        target = targets[i] #3x5
+        prediction = predictions[i]
+        currentline = None
+        last_zero_line = None
+        #check si prediction
+        for j, object in target:
+            if object[-1] == classe and target[0]==1:
+                currentline = j
+            if target[0] == 0:
+                last_zero_line = j
+        if currentline == None:
+            currentline = last_zero_line
+
+        L_xywh = (target[currentline][1] - prediction[1]) ** 2 + (target[currentline][2] - prediction[2]) ** 2 + 2 * ((np.sqrt(target[currentline][3]) - np.sqrt(prediction[3])) ** 2)
+        L_class = nn.BCELoss()(prediction[0], target[currentline][0])
+        L = A * L_xywh + B * L_class
+        return L
+
+
+
+
+
 
 
 def detection_intersection_over_union(box_a, box_b):

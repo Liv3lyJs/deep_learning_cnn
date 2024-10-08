@@ -279,11 +279,22 @@ class ConveyorCnnTrainer():
         elif task =='detection':
             # Training one batch for detection neural network 
             # Zero the parameter gradients
-            optimizer.zero_grad()
-            outputs = model(image)
-            loss = criterion.forward(outputs, boxes)
-            loss.backward()
-            optimizer.step()
+
+            #optimizers = []
+            models = []
+            outputs = []
+            losses = []
+            for i in range(3):
+                models.append(self._create_model(task))
+                optimizer.zero_grad()
+                outputs.append(image)
+                # optimus = optim.Adam(self._model.parameters(), lr=self._args.lr)
+                # optimus.zero_grad()
+                # optimizers.append(optimus)
+                loss = criterion.forward(outputs, boxes, i)
+                loss.backward()
+                losses.append(loss)
+                optimizer.step()
 
             # Calculate the accuracy 
             metric.accumulate(outputs, boxes)
