@@ -13,17 +13,17 @@ class Detection_network(nn.Module):
         self.relu1 = nn.ReLU()
         self.maxpol1 = nn.MaxPool2d(kernel_size=2, padding=0, stride=2)                             # Output 13x13
         # Bloc3
-        self.conv3 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=8, out_channels=32, kernel_size=3, stride=1, padding=1)
         self.relu3 = nn.ReLU()
         # Bloc5
-        self.conv5 = nn.Conv2d(in_channels=16, out_channels=13, kernel_size=3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1)
         self.relu5 = nn.ReLU()
         self.maxpol5 = nn.MaxPool2d(kernel_size=2, padding=0, stride=2)                             # Output 6x6
 
         # Classification 
         # Bloc 6
         self.fn6 = nn.Flatten()
-        self.fl6 = nn.Linear(13*6*6, 256)
+        self.fl6 = nn.Linear(32*6*6, 256)
         self.relu6 = nn.ReLU()
 
         # Bloc 7
