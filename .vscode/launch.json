@@ -14,7 +14,7 @@
                 "--mode", "train",
                 "--task", "detection",
                 "--batch_size", "16", 
-                "--epochs", "100",
+                "--epochs", "30",
                 "--lr", "0.001",
                 "--early_stop", "25"
             ]
