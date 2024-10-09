@@ -2,70 +2,60 @@ import torch
 import torch.nn as nn
 
 
-class ModifiedClassificationNetwork(nn.Module):
-    def __init__(self, inputs_channels=1):
-        super(ModifiedClassificationNetwork, self).__init__()
+class Detection_network(nn.Module):
+    def __init__(self, num_classes=3):
+        super(Detection_network, self).__init__()
 
-        # Feature extraction layers (same as in your original network)
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=11, stride=2, padding=4)  # Output 26x26
-        self.relu1 = nn.ReLU()
-        self.maxpol1 = nn.MaxPool2d(kernel_size=2, padding=0, stride=2)  # Output 13x13
+        self.bloc1 = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),  # Shape (53,53)
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))  # Shape (27, 27)
 
-        self.conv3 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, stride=1, padding=1)
-        self.relu3 = nn.ReLU()
+        self.bloc2 = nn.Sequential(
+            nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))  # Shape (13, 13)
 
-        self.conv5 = nn.Conv2d(in_channels=16, out_channels=13, kernel_size=3, stride=1, padding=1)
-        self.relu5 = nn.ReLU()
-        self.maxpol5 = nn.MaxPool2d(kernel_size=2, padding=0, stride=2)  # Output 6x6
-
-        # Classification layers, modified for the new output shape
-        self.fn6 = nn.Flatten()
-        self.fl6 = nn.Linear(13 * 6 * 6, 512)  # Adjusted dimension
-        self.relu6 = nn.ReLU()
-
-        # The new fully connected layer for output
-        self.fl7 = nn.Sequential(
-            nn.Linear(512, 7 * 7 * 3 * 7),  # Adjusted dimension for 7x7x3x7
-            nn.Sigmoid()  # Optional Sigmoid activation, modify based on your needs
+        self.bloc3 = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
         )
 
-        # Set the target output shape
-        self.output_shape = (7, 7, 3, 7)
+        self.bloc4 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))  # Shape (6, 6)
 
-        # Freeze convolutional layers
-        self._freeze_conv_layers()
+        self.fc = nn.Sequential(
+            nn.Linear(32 * 6 * 6, 100),
+            nn.ReLU())
 
-    def _freeze_conv_layers(self):
-        # Freeze all parameters in the convolutional layers
-        for param in self.conv1.parameters():
-            param.requires_grad = False
-        for param in self.conv3.parameters():
-            param.requires_grad = False
-        for param in self.conv5.parameters():
-            param.requires_grad = False
+        # Output size is 3 objects * (4 parameters + 3 class logits) = 3 * 7 = 21
+        self.fc1 = nn.Linear(100, 3 * (4 + num_classes))  # Output shape: (batch_size, 21)
 
     def forward(self, x):
-        # Forward pass through the convolutional layers
-        x = self.conv1(x)
-        x = self.relu1(x)
-        x = self.maxpol1(x)
+        x = self.bloc1(x)
+        x = self.bloc2(x)
+        x = self.bloc3(x)
+        x = self.bloc4(x)
+        x = x.reshape(x.size(0), -1)  # Flatten to (batch_size, 32 * 6 * 6)
+        x = self.fc(x)
+        x = self.fc1(x)  # Output shape: (batch_size, 21)
 
-        x = self.conv3(x)
-        x = self.relu3(x)
+        # Reshape output to (batch_size, 3, 7) where 7 is (4 parameters + 3 logits)
+        output = x.view(x.size(0), 3, 4 + 3)  # Shape: (batch_size, 3, 7)
 
-        x = self.conv5(x)
-        x = self.relu5(x)
-        x = self.maxpol5(x)
+        # Apply sigmoid activation to the first 4 parameters (presence, x, y, size)
+        output[:, :, :4] = torch.sigmoid(output[:, :, :4])
 
-        # Forward pass through the modified fully connected layers
-        x = self.fn6(x)
-        x = self.fl6(x)
-        x = self.relu6(x)
+        # The last 3 values (logits) are kept as they are for class prediction
+        # (No activation applied here since they will be used with CrossEntropyLoss)
 
-        x = self.fl7(x)
-        x = x.view(-1, *self.output_shape)  # Reshape output to (N, 7, 7, 3, 7)
-
-        return x
+        return output
 
 class AlexNet(nn.Module):
     def __init__(self, num_classes=3):
