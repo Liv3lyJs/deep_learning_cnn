@@ -10,6 +10,7 @@ import torch.optim as optim
 from torchvision import transforms
 
 from dataset import ConveyorSimulator
+from deep_learning_cnn.metrics import find_best_boxes
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, alexnet_loss2
 from visualizer import Visualizer
 
@@ -51,10 +52,12 @@ class ConveyorCnnTrainer():
             model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
             return model
         elif task == 'detection':
-            model = detection_network.AlexNet()
+            #model = detection_network.AlexNet()
+            model = detection_network.ModifiedClassificationNetwork(inputs_channels=1)
+            model.load_state_dict(torch.load("models/__pycache__/classification_network.cpython-311.pyc"), strict=False)
             return model
         elif task == 'segmentation':
-            model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
+            model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class.
             return model
         else:
             print(f'The task selected is not classification, detection nor segmentation.')
@@ -280,12 +283,13 @@ class ConveyorCnnTrainer():
             # Zero the parameter gradients
             optimizer.zero_grad()
             predictions = model(image)
-            loss = criterion(predictions, boxes)
+            predictions_chosen = find_best_boxes(predictions, boxes)
+            loss = criterion(predictions_chosen, boxes)
             loss.backward()
             optimizer.step()
 
             # Calculate the accuracy 
-            metric.accumulate(predictions, boxes)
+            metric.accumulate(predictions_chosen, boxes)
 
             return loss
         elif task == 'segmentation':

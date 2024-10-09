@@ -1,5 +1,6 @@
 import sys
 import torch.nn as nn
+import torch
 
 import numpy as np
 
@@ -186,6 +187,123 @@ class MeanAveragePrecisionMetric(Metric):
         return np.trapz(y=precisions, x=recalls)
 
 
+def construct_best_boxes_tensor(predictions, labels, batch_size, iou_threshold=0.5):
+    # Initialize the output tensor with zeros
+    best_boxes_tensor = torch.zeros((batch_size, 3, 7))
+
+    for i in range(batch_size):
+        img_preds = predictions[i]  # Shape (7, 7, 3, 7)
+        img_labels = labels[i]  # Shape (3, 5)
+
+        # Counter to track how many objects are found in the image
+        object_count = 0
+
+        for label in img_labels:
+            if label[0] == 0:  # No object in this row of labels
+                continue
+
+            # Get the ground truth box information
+            gt_x, gt_y, gt_w, gt_class = label[1], label[2], label[3], label[4]
+            ground_truth_box = (gt_x, gt_y, gt_w)
+
+            best_iou = 0
+            best_box = None
+
+            for grid_x in range(7):
+                for grid_y in range(7):
+                    for b in range(3):
+                        obj_prob = img_preds[grid_x, grid_y, b, 0]
+                        if obj_prob < iou_threshold:
+                            continue
+
+                        # Extract the predicted box information
+                        pred_x = img_preds[grid_x, grid_y, b, 1]
+                        pred_y = img_preds[grid_x, grid_y, b, 2]
+                        pred_w = img_preds[grid_x, grid_y, b, 3]
+                        pred_class_logits = img_preds[grid_x, grid_y, b, 4:]
+                        pred_class = torch.argmax(pred_class_logits).item()
+
+                        predicted_box = (pred_x, pred_y, pred_w)
+
+                        # Compute IoU
+                        iou = detection_intersection_over_union(predicted_box, ground_truth_box)
+
+                        # Update best match if this box has a higher IoU and matches the class
+                        if iou > best_iou and pred_class == gt_class:
+                            best_iou = iou
+                            best_box = [obj_prob.item(), pred_x.item(), pred_y.item(), pred_w.item(), pred_class, iou,
+                                        gt_class]
+
+            # Store the best match in the tensor if found
+            if best_box and object_count < 3:
+                best_boxes_tensor[i, object_count] = torch.tensor(best_box)
+                object_count += 1
+
+    return best_boxes_tensor
+
+
+def find_best_boxes(predictions, labels, iou_threshold=0.5):
+    # Initialize a list to store the best matches for each image in the batch
+    best_matches = []
+
+    batch_size = predictions.shape[0]
+    for i in range(batch_size):
+        img_preds = predictions[i]  # Shape (7, 7, 3, 7)
+        img_labels = labels[i]  # Shape (3, 5)
+
+        # List to store the best boxes for this image
+        img_best_boxes = []
+
+        for label in img_labels:
+            if label[0] == 0:  # No object in this label
+                continue
+
+            # Get the ground truth box information
+            gt_x, gt_y, gt_w, gt_class = label[1], label[2], label[3], label[4]
+            ground_truth_box = (gt_x, gt_y, gt_w)
+
+            best_iou = 0
+            best_box = None
+
+            for grid_x in range(7):
+                for grid_y in range(7):
+                    for b in range(3):
+                        obj_prob = img_preds[grid_x, grid_y, b, 0]
+
+                        # Check object probability threshold
+                        if obj_prob < 0.5:
+                            continue
+
+                        # Extract the predicted bounding box values
+                        pred_x = img_preds[grid_x, grid_y, b, 1]
+                        pred_y = img_preds[grid_x, grid_y, b, 2]
+                        pred_w = img_preds[grid_x, grid_y, b, 3]
+                        pred_class_logits = img_preds[grid_x, grid_y, b, 4:]
+
+                        # Create the predicted box in the same format as ground truth
+                        predicted_box = (pred_x, pred_y, pred_w)
+
+                        # Compute IoU between the predicted box and ground truth box
+                        iou = detection_intersection_over_union(predicted_box, ground_truth_box)
+
+                        # Update the best box if IoU is higher and meets probability criteria
+                        if iou > best_iou:
+                            best_iou = iou
+                            best_box = img_preds[grid_x, grid_y, b]  # Store the entire 7 values
+
+            # Store the best match in the list for this image if found
+            if best_box is not None:
+                img_best_boxes.append(best_box)
+
+        # Pad with zeros if fewer than 3 boxes were found
+        while len(img_best_boxes) < 3:
+            img_best_boxes.append(torch.zeros(7))
+
+        # Only take the first 3 best matches if more than 3 were found
+        best_matches.append(torch.stack(img_best_boxes[:3]))
+
+    # Convert list of tensors to a single tensor of shape (N, 3, 7)
+    return torch.stack(best_matches)
 def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
     A = 1
     B = 1
