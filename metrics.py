@@ -193,42 +193,40 @@ def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
     total_loss = 0
     ce_loss = nn.CrossEntropyLoss()
     obj_count = 0
-    # Step 1: Iterate over each image in the batch
+    # Iterate over each image in the batch
     for i in range(batch_size):
         target = targets[i]  # Shape: (3, 5)
         prediction = predictions[i]  # Shape: (3, 7)
         box_loss = 0.0
         class_loss = 0.0
 
-        # Step 2: Iterate over each target object in the image
+        # Iterate over each target object in the image
         for j in range(3):
-            presence = target[j, 0]  # Step 3: Extract presence indicator (0 or 1)
+            presence = target[j, 0]  # presence indicator (0 or 1)
 
-            # Step 3: If the object is not present, skip to the next object
+            # If the object is not present, skip to the next object
             if presence == 0:
                 continue
             obj_count += 1
-            # Extract target box coordinates and class label
             target_box = target[j, 1:4]  # Coordinates: (x, y, size)
             class_label = target[j, 4].long()  # Class label
 
             best_iou = -1
             best_pred_idx = -1
 
-            # Step 4: Find the prediction box with the highest IoU for the current target box
+            # Find the prediction box with the highest IoU for the current target box
             for k in range(3):
-                pred_box = prediction[k, 1:4]  # Predicted box coordinates (x, y, size)
+                pred_box = prediction[k, 1:4]  
                 iou = detection_intersection_over_union(pred_box, target_box)
 
                 if iou > best_iou:
                     best_iou = iou
                     best_pred_idx = k
 
-            # Step 5: Calculate the IoU loss for the best matching prediction box
-            box_loss += 1 - best_iou  # Loss is 1 - IoU
+            # Calculate the IoU loss for the best matching prediction box
+            box_loss += 1 - best_iou  
 
-            # Step 6: Calculate the class loss for the best matching prediction
-            # Extract the class logits from the last 3 columns for the best prediction
+            # Calculate the class loss for the best matching prediction
             best_pred_class_logits = prediction[best_pred_idx, 4:]  # Shape: (3,) - Logits for classes 0, 1, 2
 
             # Calculate cross-entropy loss for class prediction
@@ -241,34 +239,6 @@ def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
     total_loss = total_loss / obj_count
 
     return total_loss
-
-def alexnet_loss(predictions, targets, classe):
-    A = 1
-    B = 1
-    batch_size = predictions.shape[0]
-    for i in range(batch_size):
-        target = targets[i] #3x5
-        prediction = predictions[i]
-        currentline = None
-        last_zero_line = None
-        #check si prediction
-        for j, object in target:
-            if object[-1] == classe and target[0]==1:
-                currentline = j
-            if target[0] == 0:
-                last_zero_line = j
-        if currentline == None:
-            currentline = last_zero_line
-
-        L_xywh = (target[currentline][1] - prediction[1]) ** 2 + (target[currentline][2] - prediction[2]) ** 2 + 2 * ((np.sqrt(target[currentline][3]) - np.sqrt(prediction[3])) ** 2)
-        L_class = nn.BCELoss()(prediction[0], target[currentline][0])
-        L = A * L_xywh + B * L_class
-        return L
-
-
-
-
-
 
 
 def detection_intersection_over_union(box_a, box_b):
