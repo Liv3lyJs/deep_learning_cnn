@@ -1,4 +1,5 @@
 import sys
+import torch.nn as nn
 
 import numpy as np
 
@@ -185,6 +186,61 @@ class MeanAveragePrecisionMetric(Metric):
         return np.trapz(y=precisions, x=recalls)
 
 
+def alexnet_loss2(predictions, targets):  # predictions: Nx3x7, targets: Nx3x5
+    A = 1
+    B = 1
+    batch_size = predictions.shape[0]
+    total_loss = 0
+    ce_loss = nn.CrossEntropyLoss()
+    obj_count = 0
+    # Iterate over each image in the batch
+    for i in range(batch_size):
+        target = targets[i]  # Shape: (3, 5)
+        prediction = predictions[i]  # Shape: (3, 7)
+        box_loss = 0.0
+        class_loss = 0.0
+
+        # Iterate over each target object in the image
+        for j in range(3):
+            presence = target[j, 0]  # presence indicator (0 or 1)
+
+            # If the object is not present, skip to the next object
+            if presence == 0:
+                continue
+            obj_count += 1
+            target_box = target[j, 1:4]  # Coordinates: (x, y, size)
+            class_label = target[j, 4].long()  # Class label
+
+            best_iou = -1
+            best_pred_idx = -1
+
+            # Find the prediction box with the highest IoU for the current target box
+            for k in range(3):
+                pred_box = prediction[k, 1:4]  
+                iou = detection_intersection_over_union(pred_box, target_box)
+
+                if iou > best_iou:
+                    best_iou = iou
+                    best_pred_idx = k
+
+            # Calculate the IoU loss for the best matching prediction box
+            box_loss += 1 - best_iou  
+
+            # Calculate the class loss for the best matching prediction
+            best_pred_class_logits = prediction[best_pred_idx, 4:]  # Shape: (3,) - Logits for classes 0, 1, 2
+
+            # Calculate cross-entropy loss for class prediction
+            class_loss += ce_loss(best_pred_class_logits, class_label)
+
+        # Combine the losses for this image
+        total_loss += A * box_loss + B * class_loss
+
+    # Average the loss over the batch
+    total_loss = total_loss / obj_count
+
+    return total_loss
+
+
 def detection_intersection_over_union(box_a, box_b):
     area_a = box_a[2] ** 2
     area_b = box_b[2] ** 2
@@ -266,3 +322,37 @@ def segmentation_intersection_over_union(prediction, target, background_class):
         union += predicted_mask.sum() + target_mask.sum() - (predicted_mask * target_mask).sum()
 
     return intersection, union
+
+
+class Custom_loss_detection():
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input, target):
+        for i, (entree_batch, cible_batch) in enumerate(zip(input, target)):  # Entree = 7, 7, 15  -  Cible = 3, 5
+            print(f'Currently analysing batch: {i+1}')
+            value_iou_obj1 = []
+            # Si aucun objets
+            if cible_batch[0, 0] == 1:
+                # Itterer sur les rows de la batch
+                for j in entree_batch: # Entree = 7, 15
+                    # Itterer sur les columns de la batch
+                    for k in j: # Entree = 15
+                        # Envoyer les donnees de x, y, largeur de entree et cible 
+                        value_iou_obj1.append(detection_intersection_over_union(box_a=k[1:4], box_b=cible_batch[0, 1:4]))
+            else:
+                print(f'There are no object in the batch')
+                value_iou_obj1.append(0.0)
+
+                    
+
+            # for j, entree, cible in enumerate(zip(input, target), start=0):    
+            #     print(f'We are analyzing data: {j+1}')
+            #     print(f'Analyzing the first object...')
+            #     value_iou = []
+            #     if entree[:, :, 0] == 1 and entree[:, :, -1] == 0:
+            #         box_entree = entree[:, :, 3]
+            #         box_cible = cible[:, :, 3]
+            #         value_iou.append(detection_intersection_over_union(box_entree, box_cible))
+            #     else:
+            #         print(f'There is no object in the first section')

@@ -1,15 +1,19 @@
 #! usr/bin/python3
 import argparse
 import os
+import sys
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torchvision import transforms
 
 from dataset import ConveyorSimulator
-from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
+from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric, alexnet_loss2
 from visualizer import Visualizer
+
+from models import classification_network, detection_network, segmentation_network
 
 TRAIN_VALIDATION_SPLIT = 0.9
 CLASS_PROBABILITY_THRESHOLD = 0.5
@@ -44,29 +48,38 @@ class ConveyorCnnTrainer():
 
     def _create_model(self, task):
         if task == 'classification':
-            # À compléter
-            raise NotImplementedError()
+            model = classification_network.Classification_network(inputs_channels=1, n_classes=3)
+            return model
         elif task == 'detection':
-            # À compléter
-            raise NotImplementedError()
+            model = detection_network.Detection()
+            return model
         elif task == 'segmentation':
-            # À compléter
-            raise NotImplementedError()
+            model = segmentation_network.UNet(input_channels=1, n_classes=4) # The background is considered a class. 
+            return model
         else:
-            raise ValueError('Not supported task')
+            print(f'The task selected is not classification, detection nor segmentation.')
+            print(f'The program is being closed.')
+            sys.exit()
 
     def _create_criterion(self, task):
+        """
+        Creating the loss function that will be use to optimize the network
+        """
         if task == 'classification':
-            # À compléter
-            raise NotImplementedError()
+            class_weights = torch.tensor([1.105, 1.002, 1.0])
+            criterion = nn.BCEWithLogitsLoss(weight=class_weights)
+            return criterion
         elif task == 'detection':
-            # À compléter
-            raise NotImplementedError()
+            return alexnet_loss2
         elif task == 'segmentation':
-            # À compléter
-            raise NotImplementedError()
+            # Define the segmentation loss function
+            class_weights = torch.tensor([7.0, 5.0, 5.0, 1.0])
+            criterion = nn.CrossEntropyLoss(weight=class_weights)
+            return criterion
         else:
-            raise ValueError('Not supported task')
+            print(f'The task selected is not classification, detection nor segmentation.')
+            print(f'The program is being closed.')
+            sys.exit()
 
     def _create_metric(self, task):
         if task == 'classification':
@@ -76,7 +89,9 @@ class ConveyorCnnTrainer():
         elif task == 'segmentation':
             return SegmentationIntersectionOverUnionMetric(SEGMENTATION_BACKGROUND_CLASS)
         else:
-            raise ValueError('Not supported task')
+            print(f'The task selected is not classification, detection nor segmentation.')
+            print(f'The program is being closed.')
+            sys.exit()
 
     def test(self):
         params_test = {'batch_size': self._args.batch_size, 'shuffle': False, 'num_workers': 4}
@@ -204,7 +219,7 @@ class ConveyorCnnTrainer():
                                             epochs_train_metrics, epochs_validation_metrics,
                                             train_metric.get_name())
 
-        ans = input('Do you want ot test? (y/n):')
+        ans = input('Do you want to test? (y/n):')
         if ans == 'y':
             self.test()
 
@@ -246,9 +261,53 @@ class ConveyorCnnTrainer():
                 Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
+        if task == 'classification':
+            # Zero the parameter gradients
+            optimizer.zero_grad()
 
-        # À compléter
-        raise NotImplementedError()
+            # Forward + backward + optim
+            outputs = model(image)
+            loss = criterion(outputs, class_labels)
+            loss.backward()
+            optimizer.step()
+
+            # Calculate the accuracy metric
+            metric.accumulate(outputs, class_labels)
+
+            return loss
+        elif task =='detection':
+            # Training one batch for detection neural network 
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+            predictions = model(image)
+            loss = criterion(predictions, boxes)
+            loss.backward()
+            optimizer.step()
+
+            # Calculate the accuracy 
+            metric.accumulate(predictions, boxes)
+
+            return loss
+        elif task == 'segmentation':
+            # Training one batch for segmentation neural network
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+
+            # Forward + backward + optim
+            outputs = model(image)
+            loss = criterion(outputs, segmentation_target)
+            loss.backward()
+            optimizer.step()
+
+            # Calculate the Intersection over Union
+            metric.accumulate(outputs, segmentation_target)
+
+            return loss
+        else:
+            print(f'The task selected is not classification, detection nor segmentation.')
+            print(f'The program is being closed.')
+            sys.exit()
+
 
     def _test_batch(self, task, model, criterion, metric, image, segmentation_target, boxes, class_labels):
         """
@@ -287,9 +346,45 @@ class ConveyorCnnTrainer():
                 Si un 0 est présent à (i, 2), aucune croix n'est présente dans l'image i.
         :return: La valeur de la fonction de coût pour le lot
         """
+        if task == 'classification':
+            # Testing the batch for the classification 
+            # Getting the prediction
+            outputs = model(image)
 
-        # À compléter
-        raise NotImplementedError()
+            # Loss calculation
+            loss = criterion(outputs, class_labels)
+
+            # Calculate the accuracy metric
+            metric.accumulate(outputs, class_labels)
+
+            return loss
+        elif task =='detection':
+            # Testing the batch for the detection
+            outputs = model(image)
+
+            # Loss calculation 
+            loss = criterion(outputs, boxes)
+
+            # Calculate the accuracy 
+            metric.accumulate(outputs, boxes)
+
+            return loss
+        elif task == 'segmentation':
+            # testing the batch for the segmentation
+            # Getting the prediction
+            outputs = model(image)
+
+            # Loss calculation
+            loss = criterion(outputs, segmentation_target)
+
+            # Calculate the Intersection over Union
+            metric.accumulate(outputs, segmentation_target)
+
+            return loss
+        else:
+            print(f'The task selected is not classification, detection nor segmentation.')
+            print(f'The program is being closed.')
+            sys.exit()
 
 
 if __name__ == '__main__':
